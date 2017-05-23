@@ -1,0 +1,203 @@
+/* This is a multithreaded program by using semaphores
+* to control the execution of each thread.
+*
+* Name: Chow Ee Ling	ID: 1403712
+* Name: Lim Ru Sin		ID: 1403537
+*/
+
+#include <stdio.h>		//standard I/O routines
+#include <unistd.h>
+#include <stdlib.h>		//for exit
+#include <pthread.h>	//pthreads functions and data structures
+#include <semaphore.h>
+
+//constant variables
+#define MAX_PILES 12
+#define MAX_FUEL 24
+#define PILES_CONSUMED 2
+#define FUEL_CONSUMED 4
+#define INDICATOR 6
+
+void *workers(void *arg);
+void *pile_supplier(void *arg);
+void *fuel_supplier(void *arg);
+
+//global variable declaration
+int mineralFound = 0;
+int piles_num = 0;
+int fuel_amount = 0;
+
+sem_t p_supplier, f_supplier, p_operation, f_operation;	//to define semaphore object
+
+int main()
+{
+	//local variable declaration
+	int res;
+	pthread_t o_thread, w_thread, p_thread, f_thread;
+	void *thread_result;
+
+	//to initialize semaphore object
+	res = sem_init(&p_operation, 0, 0);
+	if (res != 0)
+	{
+		perror("Semaphore initialization failed");
+		exit(EXIT_FAILURE);
+	}
+
+	res = sem_init(&f_operation, 0, 0);
+	if (res != 0)
+	{
+		perror("Semaphore initialization failed");
+		exit(EXIT_FAILURE);
+	}
+
+	res = sem_init(&p_supplier, 0, 0);
+	if (res != 0)
+	{
+		perror("Semaphore initialization failed");
+		exit(EXIT_FAILURE);
+	}
+
+	res = sem_init(&f_supplier, 0, 0);
+	if (res != 0)
+	{
+		perror("Semaphore initialization failed");
+		exit(EXIT_FAILURE);
+	}
+
+	printf("Mineral indicator value: %d\n", INDICATOR);
+
+	//create a new thread that will execute 'workers'
+	res = pthread_create(&w_thread, NULL, workers, NULL);
+	if (res != 0)		//if failed to create workers thread
+	{
+		perror("Workers thread creation failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//create a new thread that will execute 'pile_supplier'
+	res = pthread_create(&p_thread, NULL, pile_supplier, NULL);
+	if (res != 0)		//if failed to create pile supplier thread
+	{
+		perror("Pile supplier thread creation failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//create a new thread that will execute 'fuel_supplier'
+	res = pthread_create(&f_thread, NULL, fuel_supplier, NULL);
+	if (res != 0)		//if failed to create fuel supplier thread
+	{
+		perror("Fuel supplier thread creation failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//waiting for the workers thread to finish
+	res = pthread_join(w_thread, &thread_result);
+	if (res != 0)
+	{
+		perror("\n\nWorkers thread join failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//waiting for the pile supplier thread to finish
+	res = pthread_join(p_thread, &thread_result);
+	if (res != 0)
+	{
+		perror("Pile supplier thread join failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//waiting for the fuel_supplier thread to finish
+	res = pthread_join(f_thread, &thread_result);
+	if (res != 0)
+	{
+		perror("Fuel supplier thread join failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//to destroy semaphore
+	sem_destroy(&p_operation);
+	sem_destroy(&f_operation);
+	sem_destroy(&p_supplier);]
+	sem_destroy(&f_supplier);
+	printf("\nMineral is found.");
+	exit(EXIT_SUCCESS);				//successful termination
+}
+
+int isFound(void)
+{
+	srand(time(NULL));
+	return (rand() % 8 + 1);
+}
+
+void *workers(void *arg)
+{
+	sem_wait(&p_operation);
+	sem_wait(&f_operation);
+
+	while (mineralFound != INDICATOR)
+	{
+		if (piles_num == 0 && fuel_amount == 0)
+		{
+			sem_post(&p_supplier);
+			sem_post(&f_supplier);
+		}
+
+		if (piles_num == MAX_PILES && fuel_amount == MAX_FUEL)
+			printf("Consuming...\n");
+
+		while (mineralFound != INDICATOR && piles_num >= PILES_CONSUMED && fuel_amount >= FUEL_CONSUMED)
+		{
+			piles_num -= PILES_CONSUMED;
+			fuel_amount -= FUEL_CONSUMED;
+			mineralFound = isFound();
+			printf("Remaining piles: %2d\t", piles_num);
+			printf("Remaining fuel: %2d\t", fuel_amount);
+			printf("Mineral: %d\n", mineralFound);
+
+			if (mineralFound != INDICATOR)
+				sleep(3);
+		}
+	}
+	pthread_exit(NULL);		//terminate workers thread
+}
+
+void *pile_supplier(void *arg)
+{
+	printf("Adding resources...\n");
+	piles_num = MAX_PILES;
+	printf("%d piles are added.\n", piles_num);
+	sem_post(&p_operation);
+
+	while (mineralFound != INDICATOR)
+	{
+		if (mineralFound != INDICATOR && piles_num == 0)
+		{
+			sem_wait(&p_supplier);
+			printf("Adding resources...\n");
+			piles_num = MAX_PILES;
+			printf("%d piles are added.\n", piles_num);
+		}
+	}
+	pthread_exit(NULL);		//terminate pile supplier thread
+}
+
+void *fuel_supplier(void *arg)
+{
+	printf("Adding resources...\n");
+	fuel_amount = MAX_FUEL;
+	printf("%d units of fuel are added.\n", fuel_amount);
+	sem_post(&f_operation);
+
+	while (mineralFound != INDICATOR)
+	{
+		if (mineralFound != INDICATOR && fuel_amount == 0)
+		{
+			sem_wait(&f_supplier);
+			printf("Adding resources...\n");
+			fuel_amount = MAX_FUEL;
+			printf("%d units of fuel are added.\n", fuel_amount);
+		}
+	}
+	pthread_exit(NULL);		//terminate fuel supplier thread
+}
